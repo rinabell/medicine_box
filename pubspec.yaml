@@ -1,0 +1,36 @@
+name: medicine_box
+description: "家庭药箱清点工具：扫码建档、自动计件、自定义备注、说明书搜索。"
+publish_to: 'none'
+version: 1.4.0+6
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 本地数据库：药品档案、件数、备注、说明书都存在手机里
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+  # 本机保存查询用的 AppKey（不是账号，不用登录）
+  shared_preferences: ^2.2.3
+  # 相机扫码：同时支持二维码与 EAN-13 等一维条形码
+  # 5.x 与 Flutter 3.50 的 CameraX / 渲染层不兼容，必须用 7.x
+  mobile_scanner: ^7.5.0
+  # 联网查说明书（查不到会自动回退到手填）
+  http: ^1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  # 让数据库测试能在桌面 VM 里跑真实 SQLite
+  sqflite_common_ffi: ^2.3.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    # 选项3：Gitee 开源 barcode 项目的药品条码库（47,722 条）。
+    # 切成 11 个 8MB 分片：APK 内约 18MB，运行时逐片写入私有目录，
+    # 避免一次性把 83MB 读进内存，也绕开 AGP 对 .gz asset 的自动解压。
+    - assets/catalog/

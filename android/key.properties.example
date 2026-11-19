@@ -1,0 +1,7 @@
+# 正式打包签名用。复制本文件为 android/key.properties 并改成你自己的值。
+# 生成 keystore 的命令见项目打包说明（keytool -genkey ...）。
+# 切勿把 key.properties 和 .jks 文件提交到公开仓库。
+storePassword=改成你的密钥库密码
+keyPassword=改成你的密钥密码
+keyAlias=medicinebox
+storeFile=app/medicinebox.jks

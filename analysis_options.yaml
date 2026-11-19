@@ -1,0 +1,10 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+  errors:
+    # Flutter 3.50 起对 package:flutter/material.dart 给出软弃用提示，
+    # 本项目仍按官方 Material 组件编写，暂不迁移到 material_ui。
+    deprecated_member_use: ignore
+include: package:flutter_lints/flutter.yaml
