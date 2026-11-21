@@ -7,6 +7,8 @@ import '../db/database_helper.dart';
 import '../models/medicine.dart';
 import '../services/barcode_utils.dart';
 import '../services/lookup_service.dart';
+import '../services/medicine_lookup.dart';
+import '../widgets/expiry_dialog.dart';
 import 'medicine_edit_page.dart';
 
 /// 页面层：扫码页
@@ -63,6 +65,8 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   /// 扫码 / 手输编码的唯一入口：老码计件，新码建档。
+  /// 需求3：识别后先弹保质期框（可跳过），结果是本次录入的日期列表
+  /// （null 表示用户取消整个流程）。
   Future<void> _handleCode(String raw) async {
     final code = BarcodeUtils.normalize(raw);
     if (code.isEmpty || _busy) return;
@@ -75,9 +79,27 @@ class _ScanPageState extends State<ScanPage> {
     final existing = await _db.findByCode(code);
     if (!mounted) return;
 
+    // 先问保质期：老码带出已存日期方便追加，新码留空
+    final expiryInput = await showExpiryDialog(
+      context,
+      initial: existing?.expiryDates,
+    );
+    if (!mounted) return;
+    if (expiryInput == null) {
+      // 用户按返回键取消整个流程
+      setState(() {
+        _busy = false;
+        _status = '已取消，可继续扫码';
+      });
+      return;
+    }
+
     if (existing != null) {
       // 需求②：同款药第二次扫到 → 件数 +1，不再让用户重复填资料
       await _db.increment(code);
+      if (expiryInput.isNotEmpty) {
+        await _db.appendExpiryDates(code, expiryInput);
+      }
       if (!mounted) return;
       Navigator.of(context)
           .pop('已入库：${existing.name}，现有 ${existing.count + 1} 件');
@@ -94,6 +116,8 @@ class _ScanPageState extends State<ScanPage> {
         builder: (_) => MedicineEditPage(
           code: code,
           suggestion: outcome.result,
+          // 需求3：把扫码弹窗录入的保质期带进建档页一起保存
+          initialExpiryDates: expiryInput,
           // 带上「怎么办」：例如「没订购 66-24 资源包」会明确提示去订购，
           // 或引导用户改用免费的 1468 药品库按药名补全说明书。
           lookupMessage: outcome.ok ? null : outcome.displayMessage,
@@ -138,6 +162,71 @@ class _ScanPageState extends State<ScanPage> {
     );
     input.dispose();
     if (value != null && value.isNotEmpty) await _handleCode(value);
+  }
+
+  /// 需求2：药盒没有条码 / 条码扫不出但看得清药名时的入口。
+  /// 输入药名 → 先按药名查一次说明书（补成分/说明书）→ 进建档页。
+  /// 没有编码也能建档：用 MANUAL-时间戳 作为本机唯一主键，不影响计件和搜索。
+  Future<void> _manualNameInput() async {
+    final input = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('手动输入药名'),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '药盒上的名字，例如 蒙脱石散',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, input.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    if (name == null || name.isEmpty || _busy) return;
+
+    setState(() {
+      _busy = true;
+      _status = '正在按药名查说明书…';
+    });
+
+    final outcome = await LookupService.lookupByDrugName(name);
+    if (!mounted) return;
+
+    final manualCode = 'MANUAL-${DateTime.now().microsecondsSinceEpoch}';
+    final saved = await Navigator.of(context).push<Medicine>(
+      MaterialPageRoute(
+        builder: (_) => MedicineEditPage(
+          code: manualCode,
+          suggestion: LookupResult(
+            name: name,
+            ingredient: outcome.result?.ingredient ?? '',
+            leaflet: outcome.result?.leaflet ?? '',
+            category: outcome.result?.category ?? '',
+          ),
+          lookupMessage: outcome.ok ? null : outcome.displayMessage,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (saved != null) {
+      Navigator.of(context).pop('已添加：${saved.name}');
+    } else {
+      setState(() {
+        _busy = false;
+        _status = '已取消，可继续扫码';
+      });
+    }
   }
 
   Future<void> _toggleTorch() async {
@@ -225,6 +314,11 @@ class _ScanPageState extends State<ScanPage> {
                   onPressed: _busy ? null : _manualInput,
                   icon: const Icon(Icons.keyboard),
                   label: const Text('扫不出来？手动输入编码'),
+                ),
+                TextButton.icon(
+                  onPressed: _busy ? null : _manualNameInput,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('没有条码？手动输入药名'),
                 ),
                 const Text(
                   '提示：69 开头 13 位条形码命中率最高；20 位追溯码通常查不到资料。\n'
@@ -339,7 +433,7 @@ class _CameraErrorView extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                '也可以下滑用手动输入编码',
+                '也可以下滑手动输入编码或药名',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
               ),
             ],

@@ -25,7 +25,8 @@ class DatabaseHelper {
   final DatabaseFactory? _factory;
   final String _dbName;
 
-  static const int _dbVersion = 1;
+  // v2：需求3 增加 expiry_dates（保质期），旧库通过 onUpgrade 补列。
+  static const int _dbVersion = 2;
   static const String _table = 'medicines';
 
   DatabaseFactory get _activeFactory => _factory ?? databaseFactory;
@@ -57,11 +58,20 @@ class DatabaseHelper {
               note        TEXT NOT NULL DEFAULT '',
               count       INTEGER NOT NULL DEFAULT 1,
               source      TEXT NOT NULL DEFAULT 'manual',
+              expiry_dates TEXT NOT NULL DEFAULT '',
               created_at  INTEGER NOT NULL,
               updated_at  INTEGER NOT NULL
             )
           ''');
           await db.execute('CREATE INDEX idx_medicines_name ON $_table(name)');
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          // 老用户升级：补列即可，原有档案、件数、备注全部保留。
+          if (oldVersion < 2) {
+            await db.execute(
+              "ALTER TABLE $_table ADD COLUMN expiry_dates TEXT NOT NULL DEFAULT ''",
+            );
+          }
         },
       ),
     );
@@ -124,6 +134,29 @@ class DatabaseHelper {
   Future<void> update(Medicine m) async {
     final db = await database;
     await db.update(_table, m.toMap(), where: 'code = ?', whereArgs: [m.code]);
+  }
+
+  /// 需求3：扫描已建档的药时，把新录入的保质期追加进去（去重）。
+  /// 不清空原有日期，也不影响件数与备注。
+  Future<void> appendExpiryDates(String code, List<String> dates) async {
+    if (dates.isEmpty) return;
+    final current = await findByCode(code);
+    if (current == null) return;
+    final merged = <String>[...current.expiryDates];
+    for (final d in dates) {
+      if (!merged.contains(d)) merged.add(d);
+    }
+    await dbUpdateExpiry(code, merged);
+  }
+
+  Future<void> dbUpdateExpiry(String code, List<String> dates) async {
+    final db = await database;
+    await db.update(
+      _table,
+      {'expiry_dates': dates.join(','), 'updated_at': _now()},
+      where: 'code = ?',
+      whereArgs: [code],
+    );
   }
 
   Future<void> delete(String code) async {

@@ -13,6 +13,7 @@ void main() {
         note: '放在客厅抽屉',
         count: 3,
         source: 'remote',
+        expiryDates: ['2026-12-01', '2027-06-15'],
         createdAt: 1000,
         updatedAt: 2000,
       );
@@ -25,6 +26,7 @@ void main() {
       expect(restored.note, '放在客厅抽屉');
       expect(restored.count, 3);
       expect(restored.source, 'remote');
+      expect(restored.expiryDates, ['2026-12-01', '2027-06-15']);
       expect(restored.createdAt, 1000);
       expect(restored.updatedAt, 2000);
     });
@@ -38,8 +40,18 @@ void main() {
       expect(m.note, '');
       expect(m.count, 1);
       expect(m.source, 'manual');
+      expect(m.expiryDates, isEmpty);
       expect(m.createdAt, 0);
       expect(m.updatedAt, 0);
+    });
+
+    test('旧数据没有 expiry_dates 字段时安全退化为空', () {
+      final m = Medicine.fromMap({
+        'code': '6901',
+        'name': '老药',
+        'expiry_dates': null,
+      });
+      expect(m.expiryDates, isEmpty);
     });
 
     test('count 存成 double 也能转回 int', () {
@@ -64,13 +76,16 @@ void main() {
         createdAt: 100,
         updatedAt: 100,
       );
-      final updated = m.copyWith(name: '新名字', count: 5, updatedAt: 200);
+      final updated = m.copyWith(
+          name: '新名字', count: 5, updatedAt: 200,
+          expiryDates: const ['2028-01-01']);
       expect(updated.code, '6901');
       expect(updated.name, '新名字');
       expect(updated.note, '旧备注');
       expect(updated.count, 5);
       expect(updated.createdAt, 100);
       expect(updated.updatedAt, 200);
+      expect(updated.expiryDates, ['2028-01-01']);
     });
   });
 

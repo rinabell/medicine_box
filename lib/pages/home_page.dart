@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../db/database_helper.dart';
 import '../models/medicine.dart';
+import '../services/expiry_utils.dart';
 import 'medicine_detail_page.dart';
 import 'scan_page.dart';
 import 'settings_page.dart';
@@ -9,14 +10,21 @@ import 'settings_page.dart';
 /// 页面层：首页（药箱列表 + 搜索）
 /// 搜索框输入即实时过滤；「模糊 / 精准」切换只换查询算法，不跳页。
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  /// 测试时可注入独立数据库，避免污染真机药箱。
+  final DatabaseHelper? dbOverride;
+
+  /// 测试专用：直接注入列表数据，跳过数据库查询。
+  /// testWidgets 的假异步环境无法执行 sqflite_common_ffi 的真实磁盘 I/O。
+  final List<Medicine>? itemsOverride;
+
+  const HomePage({super.key, this.dbOverride, this.itemsOverride});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  final DatabaseHelper _db = DatabaseHelper.instance;
+  late final DatabaseHelper _db;
   final TextEditingController _kwController = TextEditingController();
   List<Medicine> _items = [];
   bool _exact = false; // false = 模糊，true = 精准
@@ -25,7 +33,14 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _db = widget.dbOverride ?? DatabaseHelper.instance;
+    if (widget.itemsOverride != null) {
+      // 测试注入：走与生产相同的排序逻辑，只是数据源换成内存列表
+      _items = ExpiryUtils.sortForDisplay(widget.itemsOverride!);
+      _loading = false;
+    } else {
+      _refresh();
+    }
     _kwController.addListener(() => _refresh());
   }
 
@@ -39,7 +54,8 @@ class _HomePageState extends State<HomePage> {
     final list = await _db.search(_kwController.text, exact: _exact);
     if (!mounted) return;
     setState(() {
-      _items = list;
+      // 需求3：过期的药优先显示，组内过期越久越靠前（按保质期日期升序）
+      _items = ExpiryUtils.sortForDisplay(list);
       _loading = false;
     });
   }
@@ -145,6 +161,8 @@ class _HomePageState extends State<HomePage> {
                         itemCount: _items.length,
                         itemBuilder: (context, i) {
                           final m = _items[i];
+                          final expiryLabel = ExpiryUtils.labelFor(m);
+                          final expired = ExpiryUtils.medicineExpired(m);
                           return Card(
                             child: ListTile(
                               title: Text(
@@ -162,7 +180,41 @@ class _HomePageState extends State<HomePage> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              trailing: Chip(label: Text('×${m.count}')),
+                              // 需求3：数量旁边显示保质期；过期红+加粗，未过期黑色
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // 紧凑标签：ListTile 只有 56px 高，用 Chip 会溢出
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE8F5EF),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '×${m.count}',
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  if (expiryLabel.isNotEmpty)
+                                    Text(
+                                      expiryLabel,
+                                      key: Key('expiry_${m.code}'),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: expired ? Colors.red : Colors.black,
+                                        fontWeight: expired
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                ],
+                              ),
                               onTap: () => _openDetail(m), // → 详情页
                             ),
                           );

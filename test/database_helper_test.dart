@@ -33,6 +33,7 @@ void main() {
     String leaflet = '',
     String note = '',
     int count = 1,
+    List<String> expiryDates = const [],
   }) =>
       Medicine(
         code: code,
@@ -41,6 +42,7 @@ void main() {
         leaflet: leaflet,
         note: note,
         count: count,
+        expiryDates: expiryDates,
         createdAt: 1,
         updatedAt: 1,
       );
@@ -188,5 +190,21 @@ void main() {
     expect(found!.name, '新药名');
     expect(found.note, '新备注');
     expect(found.count, 9);
+  });
+
+  test('保质期随档案存取，往返不丢失', () async {
+    await db.insert(sample(
+      expiryDates: const ['2026-12-01', '2027-06-15'],
+    ));
+    final found = await db.findByCode('6901');
+    expect(found!.expiryDates, ['2026-12-01', '2027-06-15']);
+  });
+
+  test('同码再扫计件时保质期不被清空', () async {
+    await db.insert(sample(expiryDates: const ['2027-01-01']));
+    await db.increment('6901');
+    final found = await db.findByCode('6901');
+    expect(found!.count, 2);
+    expect(found.expiryDates, ['2027-01-01']);
   });
 }

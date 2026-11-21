@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'db/database_helper.dart';
 import 'pages/home_page.dart';
+import 'services/font_scale.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,9 @@ Future<void> main() async {
   } catch (e) {
     startupError = e;
   }
+
+  // 读取本机保存的字体档位（默认3档），在首帧前生效，避免字号跳变。
+  fontLevelNotifier.value = await FontScaleSettings.current();
 
   runApp(
     startupError == null
@@ -35,6 +39,9 @@ class MedicineBoxApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF1D9E75),
         scaffoldBackgroundColor: const Color(0xFFF7FAF9),
       ),
+      // 四档字体：统一作用于所有页面与对话框。
+      builder: (context, child) =>
+          FontScaleScope(child: child ?? const SizedBox.shrink()),
       home: const HomePage(),
     );
   }

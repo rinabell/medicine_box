@@ -100,6 +100,18 @@ void main() {
     expect(find.textContaining('按药名查说明书'), findsOneWidget);
   });
 
+  testWidgets('扫码带来的保质期显示在编辑页，可保存', (tester) async {
+    await pumpPage(
+      tester,
+      const MedicineEditPage(
+        code: '6901234567890',
+        initialExpiryDates: ['2027-05-06'],
+      ),
+    );
+
+    expect(find.text('2027-05-06'), findsOneWidget);
+  });
+
   testWidgets('编辑模式标题为「编辑药品」', (tester) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     await pumpPage(

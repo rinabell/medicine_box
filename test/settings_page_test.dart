@@ -112,4 +112,23 @@ void main() {
     expect(find.text('测试本地库'), findsOneWidget);
     expect(find.text('重建本地库'), findsOneWidget);
   });
+
+  testWidgets('设置页提供四档字体选择，默认3档', (tester) async {
+    await pumpSettingsPage(tester);
+
+    expect(find.byKey(const Key('font_level_group')), findsOneWidget);
+    for (final level in [1, 2, 3, 4]) {
+      expect(find.byKey(Key('font_level_$level')), findsOneWidget);
+    }
+  });
+
+  testWidgets('点选字体4档会持久化', (tester) async {
+    await pumpSettingsPage(tester);
+
+    await tester.tap(find.byKey(const Key('font_level_4')));
+    await pumpFrames(tester);
+
+    final sp = await SharedPreferences.getInstance();
+    expect(sp.getInt('medicine_font_level'), 4);
+  });
 }

@@ -21,12 +21,16 @@ class MedicineEditPage extends StatefulWidget {
   /// 联网查询失败的原因；不为空时在顶部显示提示条。
   final String? lookupMessage;
 
+  /// 需求3：扫码后弹窗录入的保质期，带入建档页一并保存。
+  final List<String> initialExpiryDates;
+
   const MedicineEditPage({
     super.key,
     this.code,
     this.initial,
     this.suggestion,
     this.lookupMessage,
+    this.initialExpiryDates = const [],
   });
 
   @override
@@ -45,6 +49,7 @@ class _MedicineEditPageState extends State<MedicineEditPage> {
   late String _source;
   late String _code;
   late String _category;
+  late List<String> _expiryDates;
   String? _lookupMessage;
   bool _looking = false;
   bool _lookingByName = false;
@@ -63,6 +68,8 @@ class _MedicineEditPageState extends State<MedicineEditPage> {
     _count = TextEditingController(text: '${m?.count ?? 1}');
     _source = m?.source ?? (s != null ? 'remote' : 'manual');
     _category = s?.category ?? '';
+    // 编辑已有药时保留原保质期；新建时用扫码弹窗带入的日期
+    _expiryDates = m?.expiryDates ?? widget.initialExpiryDates;
     _lookupMessage = widget.lookupMessage;
   }
 
@@ -153,6 +160,7 @@ class _MedicineEditPageState extends State<MedicineEditPage> {
       note: _note.text.trim(), // 需求③：用户自定义文字，也参与搜索
       count: parsed < 0 ? 0 : parsed,
       source: _source,
+      expiryDates: _expiryDates,
       createdAt: widget.initial?.createdAt ?? now,
       updatedAt: now,
     );
@@ -291,6 +299,25 @@ class _MedicineEditPageState extends State<MedicineEditPage> {
               validator: (v) =>
                   int.tryParse(v?.trim() ?? '') == null ? '请填数字' : null,
             ),
+            if (_expiryDates.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                '保质期',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final date in _expiryDates)
+                    Chip(
+                      key: Key('expiry_chip_$date'),
+                      label: Text(date),
+                      avatar: const Icon(Icons.event_outlined, size: 16),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/data_source.dart';
+import '../services/font_scale.dart';
 import '../services/local_catalog.dart';
 import 'api_source_config_page.dart';
 
@@ -21,19 +22,30 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   DataSource _selected = DataSourceSettings.defaultSource;
+  int _fontLevel = FontScaleSettings.defaultLevel;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    DataSourceSettings.current().then((value) {
+    Future.wait([
+      DataSourceSettings.current(),
+      FontScaleSettings.current(),
+    ]).then((values) {
       if (mounted) {
         setState(() {
-          _selected = value;
+          _selected = values[0] as DataSource;
+          _fontLevel = values[1] as int;
           _loading = false;
         });
       }
     });
+  }
+
+  Future<void> _chooseFont(int level) async {
+    await FontScaleSettings.save(level);
+    if (!mounted) return;
+    setState(() => _fontLevel = level);
   }
 
   Future<void> _choose(DataSource? value) async {
@@ -65,6 +77,73 @@ class _SettingsPageState extends State<SettingsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '字体大小',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '默认 3 档（比原来大一号）；觉得太大或太小可随时切换，立即生效。',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          key: const Key('font_level_group'),
+                          children: [
+                            for (final level in FontScaleSettings.levels) ...[
+                              Expanded(
+                                child: GestureDetector(
+                                  key: Key('font_level_$level'),
+                                  onTap: () => _chooseFont(level),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: _fontLevel == level
+                                          ? Theme.of(context).colorScheme.primary
+                                          : Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      FontScaleSettings.labelOf(level).split(' · ').first,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _fontLevel == level
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (level != FontScaleSettings.levels.last)
+                                const SizedBox(width: 6),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '当前：${FontScaleSettings.labelOf(_fontLevel)}',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 const Text(
                   '扫到新药时，用哪套资料自动补全药名和说明书？',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),

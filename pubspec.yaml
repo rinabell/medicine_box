@@ -1,7 +1,7 @@
 name: medicine_box
 description: "家庭药箱清点工具：扫码建档、自动计件、自定义备注、说明书搜索。"
 publish_to: 'none'
-version: 1.4.0+6
+version: 1.5.0+7
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
